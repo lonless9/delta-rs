@@ -10,8 +10,7 @@ use datafusion::physical_optimizer::pruning::{PruningPredicate, PruningStatistic
 
 use crate::delta_datafusion::{get_null_of_arrow_type, to_correct_scalar_value};
 use crate::errors::DeltaResult;
-use crate::kernel::{Add, EagerSnapshot};
-use crate::table::state::DeltaTableState;
+use crate::kernel::Add;
 
 pub struct AddContainer<'a> {
     inner: &'a Vec<Add>,
@@ -180,74 +179,6 @@ impl PruningStatistics for AddContainer<'_> {
     }
 }
 
-impl PruningStatistics for EagerSnapshot {
-    /// return the minimum values for the named column, if known.
-    /// Note: the returned array must contain `num_containers()` rows
-    fn min_values(&self, column: &Column) -> Option<ArrayRef> {
-        self.log_data().min_values(column)
-    }
-
-    /// return the maximum values for the named column, if known.
-    /// Note: the returned array must contain `num_containers()` rows.
-    fn max_values(&self, column: &Column) -> Option<ArrayRef> {
-        self.log_data().max_values(column)
-    }
-
-    /// return the number of containers (e.g. row groups) being
-    /// pruned with these statistics
-    fn num_containers(&self) -> usize {
-        self.log_data().num_containers()
-    }
-
-    /// return the number of null values for the named column as an
-    /// `Option<UInt64Array>`.
-    ///
-    /// Note: the returned array must contain `num_containers()` rows.
-    fn null_counts(&self, column: &Column) -> Option<ArrayRef> {
-        self.log_data().null_counts(column)
-    }
-
-    /// return the number of rows for the named column in each container
-    /// as an `Option<UInt64Array>`.
-    ///
-    /// Note: the returned array must contain `num_containers()` rows
-    fn row_counts(&self, column: &Column) -> Option<ArrayRef> {
-        self.log_data().row_counts(column)
-    }
-
-    // This function is required since DataFusion 35.0, but is implemented as a no-op
-    // https://github.com/apache/arrow-datafusion/blob/ec6abece2dcfa68007b87c69eefa6b0d7333f628/datafusion/core/src/datasource/physical_plan/parquet/page_filter.rs#L550
-    fn contained(&self, column: &Column, value: &HashSet<ScalarValue>) -> Option<BooleanArray> {
-        self.log_data().contained(column, value)
-    }
-}
-
-impl PruningStatistics for DeltaTableState {
-    fn min_values(&self, column: &Column) -> Option<ArrayRef> {
-        self.snapshot.log_data().min_values(column)
-    }
-
-    fn max_values(&self, column: &Column) -> Option<ArrayRef> {
-        self.snapshot.log_data().max_values(column)
-    }
-
-    fn num_containers(&self) -> usize {
-        self.snapshot.log_data().num_containers()
-    }
-
-    fn null_counts(&self, column: &Column) -> Option<ArrayRef> {
-        self.snapshot.log_data().null_counts(column)
-    }
-
-    fn row_counts(&self, column: &Column) -> Option<ArrayRef> {
-        self.snapshot.log_data().row_counts(column)
-    }
-
-    fn contained(&self, column: &Column, values: &HashSet<ScalarValue>) -> Option<BooleanArray> {
-        self.snapshot.log_data().contained(column, values)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -256,9 +187,9 @@ mod tests {
     use datafusion::prelude::SessionContext;
     use object_store::path::Path;
 
-    use super::*;
     use crate::delta_datafusion::{files_matching_predicate, DataFusionMixins};
     use crate::kernel::Action;
+    use crate::table::state::DeltaTableState;
     use crate::test_utils::{ActionFactory, TestSchemas};
 
     fn init_table_actions() -> Vec<Action> {

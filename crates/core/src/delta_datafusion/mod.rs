@@ -106,6 +106,7 @@ pub mod expr;
 pub mod logical;
 pub mod physical;
 pub mod planner;
+pub mod pruning;
 
 pub use cdf::scan::DeltaCdfTableProvider;
 
@@ -608,12 +609,12 @@ impl<'a> DeltaScanBuilder<'a> {
                     let files_scanned = files.len();
                     (files, files_scanned, 0, None)
                 } else {
-                    let num_containers = self.snapshot.num_containers();
+                    let num_containers = self.snapshot.snapshot().num_containers();
 
                     let files_to_prune = if let Some(predicate) = &logical_filter {
                         let pruning_predicate =
                             PruningPredicate::try_new(predicate.clone(), logical_schema.clone())?;
-                        pruning_predicate.prune(self.snapshot)?
+                        pruning_predicate.prune(self.snapshot.snapshot())?
                     } else {
                         vec![true; num_containers]
                     };
@@ -722,7 +723,8 @@ impl<'a> DeltaScanBuilder<'a> {
         let stats = if let Some(mask) = pruning_mask {
             let es = self.snapshot.snapshot();
             let pruned_stats = prune_file_statistics(&es.files, mask);
-            LogDataHandler::new(&pruned_stats, es.metadata(), es.schema()).statistics()
+            let log_data = LogDataHandler::new(&pruned_stats, es.metadata(), es.schema());
+            pruning::datafusion_table_statistics_from_log_data(&log_data)
         } else {
             self.snapshot.datafusion_table_statistics()
         };
